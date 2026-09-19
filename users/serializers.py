@@ -20,6 +20,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             "username",
             "password",
             "genero",
+            "first_name",
+            "last_name",
             "nascimento",
             "telefone",
             "cpf",
