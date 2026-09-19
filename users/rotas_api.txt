@@ -1,0 +1,225 @@
+------- Rotas -------
+    POST   /auth/register/
+    POST   /auth/login/
+
+    GET    /users/
+    GET    /users/{id}/
+    PATCH  /users/{id}/
+    DELETE /users/{id}/
+    GET    /users/me/
+    PATCH  /users/me/
+
+    GET    /ongs/
+    POST   /ongs/
+    GET    /ongs/{id}/
+    PUT    /ongs/{id}/
+    PATCH  /ongs/{id}/
+    DELETE /ongs/{id}/
+
+---------------------
+
+Obs: as rotas de /denuncias/ estão documentadas em outro arquivo (denuncias_api.md).
+
+============================================================
+                        AUTENTICAÇÃO
+============================================================
+
+---------- Registro (POST /auth/register/) ----------
+Rota pública (AllowAny), não precisa de token.
+
+Front end envia:
+{
+  "email": "user@email.com",
+  "username": "user",
+  "password": "123456",
+  "genero": "masculino",
+  "nascimento": "2007-05-10",
+  "telefone": "84999999999",
+  "cpf": "12345678901",
+  "estado": "RN",
+  "cidade": "Apodi"
+}
+
+Obs: o campo "tipo" NÃO é aceito no cadastro, o usuário sempre é criado
+como "usuario" por padrão (default do model). Pra virar "ong" ou "policia"
+precisa ser alterado depois, por um admin.
+
+a API vai devolver os dados criados (mesmo formato do envio, sem a senha).
+--------------------------------------------------------
+
+---------- Login (POST /auth/login/) ----------
+Rota pública (AllowAny), não precisa de token.
+
+Front end envia (login é feito por email, não por username):
+{
+  "email": "admin@admin.com",
+  "password": "admin"
+}
+
+a API vai devolver:
+{
+  "access": "TOKEN_DE_ACESSO",
+  "refresh": "TOKEN_DE_REFRESH"
+}
+------------------------------------------------
+
+============================================================
+                          USUÁRIO
+============================================================
+
+Todas as rotas de /users/ exigem autenticação.
+Permissão: só o dono do perfil ou um admin (is_superuser) consegue
+ver/editar/apagar um usuário específico (IsOwnerorAdmin).
+
+Headers obrigatórios:
+- Authorization: Bearer TOKEN_DE_ACESSO
+- Content-Type: application/json
+
+Métodos disponíveis nessa rota: GET, PATCH, DELETE (não existe POST nem PUT
+em /users/, cadastro é só pelo /auth/register/)
+
+---------- Listar (GET /users/) ----------
+Retorna a lista de usuários, ordenada por id.
+Cada item no formato:
+{
+    "first_name": "Hélio",
+    "last_name": "Tarquinio",
+    "genero": "Masculino",
+    "email": "heliobolado123@gmail.com",
+    "nascimento": "2007-01-01",
+    "cpf": "11111111111",
+    "telefone": "84999989999",
+    "estado": "RN",
+    "cidade": "Caraúbas",
+    "tipo": "usuario"
+}
+--------------------------------------------
+
+---------- Detalhar (GET /users/{id}/) ----------
+Só o dono do perfil ou um admin conseguem ver.
+Retorna o mesmo formato do item da listagem acima.
+--------------------------------------------------------
+
+---------- Atualizar (PATCH /users/{id}/) ----------
+Só o dono do perfil ou um admin conseguem editar.
+Envia só o que mudou, por exemplo:
+{
+  "telefone": "88888888",
+  "cidade": "Natal"
+}
+a API devolve o objeto atualizado.
+------------------------------------------------------
+
+---------- Remover (DELETE /users/{id}/) ----------
+Só o dono do perfil ou um admin conseguem apagar.
+Retorna 204 No Content em caso de sucesso.
+----------------------------------------------------
+
+---------- Meu perfil (GET /users/me/) ----------
+Pega os dados do usuário atual, sem precisar do id — a API identifica o
+usuário pelo token enviado no header Authorization.
+
+a API devolve:
+{
+    "first_name": "",
+    "last_name": "",
+    "genero": "",
+    "email": "admin@admin.com",
+    "nascimento": null,
+    "cpf": null,
+    "telefone": "",
+    "estado": "",
+    "cidade": "",
+    "tipo": ""
+}
+--------------------------------------------------
+
+---------- Meu perfil (PATCH /users/me/) ----------
+Atualiza os dados do usuário atual, pela mesma rota, só enviando o método
+PATCH com o dado novo. Envia só o que mudou:
+{
+  "telefone": "88888888",
+  "cidade": "Natal"
+}
+
+a API devolve os dados atualizados:
+{
+  "telefone": "88888888",
+  "cidade": "Natal",
+  "estado": "RN",
+  "tipo": "admin",
+  ...
+}
+--------------------------------------------------
+
+============================================================
+                            ONG
+============================================================
+
+Rota exige autenticação (IsAuthenticated) + permissão customizada
+IsOwnerOrAdminOng. CRUD completo (GET, POST, PUT, PATCH, DELETE), mas agora
+COM checagem de dono nas rotas de escrita:
+
+- GET /ongs/ e GET /ongs/{id/}    -> qualquer usuário autenticado pode ver
+- POST /ongs/                     -> qualquer usuário autenticado pode criar
+- PUT / PATCH / DELETE /ongs/{id}/ -> só o dono do perfil de ONG
+                                       (usuario == request.user) ou admin
+
+Obs: assim como em /denuncias/, essa checagem de dono é por objeto — só
+vale pra rotas de detalhe ({id}/). A listagem (GET /ongs/) continua aberta
+pra qualquer autenticado, sem filtrar por dono.
+
+Headers obrigatórios:
+- Authorization: Bearer TOKEN_DE_ACESSO
+- Content-Type: application/json
+
+---------- Listar (GET /ongs/) ----------
+Retorna a lista de ONGs cadastradas, no formato:
+[
+  {
+    "id": 1,
+    "usuario": 4,
+    "endereco": "Rua das Flores, 123 - Apodi/RN",
+    "pix": "ong@email.com",
+    "instagram": "@ongajudaanimal",
+    "descricao": "ONG de resgate e proteção animal"
+  }
+]
+--------------------------------------------
+
+---------- Criar (POST /ongs/) ----------
+Front end envia (todos os campos são obrigatórios):
+{
+  "usuario": 4,
+  "endereco": "Rua das Flores, 123 - Apodi/RN",
+  "pix": "ong@email.com",
+  "instagram": "@ongajudaanimal",
+  "descricao": "ONG de resgate e proteção animal"
+}
+
+Obs: "usuario" é o id do usuário dono do perfil de ONG (relação
+OneToOne — cada usuário só pode ter 1 perfil de ONG vinculado).
+
+a API devolve o objeto criado, com o "id" novo.
+--------------------------------------------
+
+---------- Detalhar (GET /ongs/{id}/) ----------
+Retorna os dados de uma ONG específica, mesmo formato da listagem.
+------------------------------------------------------
+
+---------- Atualizar completo (PUT /ongs/{id}/) ----------
+Precisa enviar todos os campos obrigatórios (igual ao POST).
+----------------------------------------------------------
+
+---------- Atualizar parcial (PATCH /ongs/{id}/) ----------
+Envia só o que mudou:
+{
+  "instagram": "@novoinstagram",
+  "endereco": "Av. Principal, 456 - Apodi/RN"
+}
+a API devolve o objeto atualizado.
+------------------------------------------------------------
+
+---------- Remover (DELETE /ongs/{id}/) ----------
+Retorna 204 No Content em caso de sucesso.
+----------------------------------------------------
