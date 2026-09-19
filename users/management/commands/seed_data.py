@@ -4,11 +4,11 @@ from datetime import date, timedelta
 
 from users.models import User, Ong
 from denuncias.models import Denuncias
-from adocoes.models import Animal
+from adocoes.models import Animal, Adocao
 
 
 class Command(BaseCommand):
-    help = "Popula o banco com dados de teste (usuários, ONGs, animais e denúncias). Seguro rodar várias vezes: não duplica dados."
+    help = "Popula o banco com dados de teste (usuários, ONGs, animais, denúncias e adoções). Seguro rodar várias vezes: não duplica dados."
 
     def handle(self, *args, **options):
         self.stdout.write("Iniciando seed de dados do HelpPets...")
@@ -32,7 +32,7 @@ class Command(BaseCommand):
             self.stdout.write("  -> Superusuário já existe, pulando.")
 
         # ------------------------------------------------------------------
-        # Usuários comuns
+        # Usuários comuns (todos em Caraúbas/RN, pra facilitar teste de filtro por cidade)
         # ------------------------------------------------------------------
         usuarios_comuns = [
             {
@@ -45,7 +45,7 @@ class Command(BaseCommand):
                 "telefone": "84988887777",
                 "cpf": "11122233344",
                 "estado": "RN",
-                "cidade": "Natal",
+                "cidade": "Caraúbas",
             },
             {
                 "username": "carlos.souza",
@@ -57,7 +57,7 @@ class Command(BaseCommand):
                 "telefone": "84977776666",
                 "cpf": "22233344455",
                 "estado": "RN",
-                "cidade": "Mossoró",
+                "cidade": "Caraúbas",
             },
             {
                 "username": "beatriz.lima",
@@ -69,7 +69,7 @@ class Command(BaseCommand):
                 "telefone": "84966665555",
                 "cpf": "33344455566",
                 "estado": "RN",
-                "cidade": "Apodi",
+                "cidade": "Caraúbas",
             },
         ]
 
@@ -86,7 +86,7 @@ class Command(BaseCommand):
             usuarios_criados[dados["username"]] = user
 
         # ------------------------------------------------------------------
-        # ONGs (usuário tipo 'ong' + perfil Ong)
+        # ONGs (usuário tipo 'ong' + perfil Ong) — também em Caraúbas/RN
         # ------------------------------------------------------------------
         ongs_info = [
             {
@@ -95,11 +95,11 @@ class Command(BaseCommand):
                 "first_name": "Patinhas do RN",
                 "last_name": "",
                 "telefone": "84933334444",
-                "cidade": "Natal",
-                "endereco": "Rua das Flores, 123 - Natal/RN",
+                "cidade": "Caraúbas",
+                "endereco": "Rua das Flores, 123 - Caraúbas/RN",
                 "pix": "contato@patinhasdorn.org",
                 "instagram": "@patinhasdorn",
-                "descricao": "ONG dedicada ao resgate e adoção de cães e gatos abandonados na Grande Natal.",
+                "descricao": "ONG dedicada ao resgate e adoção de cães e gatos abandonados em Caraúbas e região.",
             },
             {
                 "username": "ong.focinhosdoseraom",
@@ -107,8 +107,8 @@ class Command(BaseCommand):
                 "first_name": "Focinhos do Sertão",
                 "last_name": "",
                 "telefone": "84922223333",
-                "cidade": "Mossoró",
-                "endereco": "Av. Principal, 456 - Mossoró/RN",
+                "cidade": "Caraúbas",
+                "endereco": "Av. Principal, 456 - Caraúbas/RN",
                 "pix": "focinhosdosertao@pix.com",
                 "instagram": "@focinhosdosertao",
                 "descricao": "Resgate, castração e adoção responsável de animais em situação de rua no oeste potiguar.",
@@ -152,7 +152,7 @@ class Command(BaseCommand):
         # ------------------------------------------------------------------
         # Animais para adoção
         # ------------------------------------------------------------------
-        animais = [
+        animais_info = [
             {
                 "nome": "Bidu",
                 "especie": "Cachorro",
@@ -185,8 +185,8 @@ class Command(BaseCommand):
                 "especie": "Cachorro",
                 "raca": "SRD (Vira-lata)",
                 "idade": "6 meses",
-                "descricao": "Filhote resgatada na zona rural de Mossoró, cheia de energia.",
-                "status_adocao": "disponivel",
+                "descricao": "Filhote resgatada na zona rural de Caraúbas, cheia de energia.",
+                "status_adocao": "em_processo",
                 "ong": ongs_criadas["ong.focinhosdoseraom"],
             },
             {
@@ -200,68 +200,70 @@ class Command(BaseCommand):
             },
         ]
 
-        for dados in animais:
-            _, created = Animal.objects.get_or_create(
+        animais_criados = {}
+        for dados in animais_info:
+            animal, created = Animal.objects.get_or_create(
                 nome=dados["nome"],
                 ong=dados["ong"],
                 defaults=dados,
             )
             if created:
                 self.stdout.write(self.style.SUCCESS(f"  -> Animal criado: {dados['nome']}"))
+            animais_criados[dados["nome"]] = animal
 
         # ------------------------------------------------------------------
-        # Denúncias
+        # Denúncias — também em Caraúbas/RN (coordenadas aproximadas da cidade)
         # ------------------------------------------------------------------
         agora = timezone.now()
 
         denuncias = [
             {
-                "titulo_caixinha": "Cachorro ferido na BR-405",
+                "titulo_caixinha": "Cachorro ferido na estrada de Caraúbas",
                 "midia_path": "seed/denuncia_1.jpg",
                 "tipo_animal": "Cachorro",
                 "quantidade": 1,
-                "latitude": -5.199200,
-                "longitude": -37.799900,
-                "cidade": "Apodi",
+                "latitude": -5.742200,
+                "longitude": -37.475000,
+                "cidade": "Caraúbas",
                 "condicao": ["Machucado", "Assustado"],
                 "descricao": "Cachorro visto mancando na beira da estrada, parece ter sido atropelado.",
                 "motivo": "Maus-tratos / acidente",
                 "data_encontro": agora - timedelta(days=2),
                 "status": "aberto",
-                "ong_id": None,
-                "usuario_id": usuarios_criados["beatriz.lima"],
+                "ong": None,
+                "usuario": usuarios_criados["beatriz.lima"],
             },
             {
                 "titulo_caixinha": "Ninhada de gatos abandonada",
                 "midia_path": "seed/denuncia_2.jpg",
                 "tipo_animal": "Gato",
                 "quantidade": 4,
-                "latitude": -5.795300,
-                "longitude": -35.199500,
-                "cidade": "Natal",
+                "latitude": -5.736500,
+                "longitude": -37.466600,
+                "cidade": "Caraúbas",
                 "condicao": ["Muito magro", "Sujo"],
                 "descricao": "Quatro filhotes de gato encontrados numa caixa perto de um terreno baldio.",
                 "motivo": "Abandono",
                 "data_encontro": agora - timedelta(days=5),
                 "status": "atendimento",
-                "ong_id": ongs_criadas["ong.patinhas"],
-                "usuario_id": usuarios_criados["joana.silva"],
+                "ong": ongs_criadas["ong.patinhas"],
+                "usuario": usuarios_criados["joana.silva"],
             },
             {
                 "titulo_caixinha": "Cavalo solto em área de risco",
                 "midia_path": "seed/denuncia_3.jpg",
                 "tipo_animal": "Equino",
                 "quantidade": 1,
-                "latitude": -5.187500,
-                "longitude": -37.343300,
-                "cidade": "Mossoró",
+                "latitude": -5.732000,
+                "longitude": -37.475900,
+                "cidade": "Caraúbas",
                 "condicao": ["Perto de trânsito intenso", "Muito quieto / parado"],
                 "descricao": "Cavalo perambulando próximo à rodovia, oferecendo risco a motoristas.",
                 "motivo": "Risco à segurança / possível abandono",
                 "data_encontro": agora - timedelta(days=10),
                 "status": "finalizado",
-                "ong_id": ongs_criadas["ong.focinhosdoseraom"],
-                "usuario_id": usuarios_criados["carlos.souza"],
+                "ong": ongs_criadas["ong.focinhosdoseraom"],
+                "usuario": usuarios_criados["carlos.souza"],
             },
         ]
 
@@ -272,5 +274,34 @@ class Command(BaseCommand):
             )
             if created:
                 self.stdout.write(self.style.SUCCESS(f"  -> Denúncia criada: {dados['titulo_caixinha']}"))
+
+        # ------------------------------------------------------------------
+        # Adoções (liga um animal já adotado/em processo a um usuário e uma ONG)
+        # ------------------------------------------------------------------
+        adocoes = [
+            {
+                "animal": animais_criados["Thor"],
+                "ong": ongs_criadas["ong.patinhas"],
+                "usuario": usuarios_criados["carlos.souza"],
+                "data_adocao": agora - timedelta(days=15),
+            },
+            {
+                "animal": animais_criados["Nina"],
+                "ong": ongs_criadas["ong.focinhosdoseraom"],
+                "usuario": usuarios_criados["joana.silva"],
+                "data_adocao": agora - timedelta(days=1),
+            },
+        ]
+
+        for dados in adocoes:
+            _, created = Adocao.objects.get_or_create(
+                animal=dados["animal"],
+                usuario=dados["usuario"],
+                defaults=dados,
+            )
+            if created:
+                self.stdout.write(
+                    self.style.SUCCESS(f"  -> Adoção registrada: {dados['animal'].nome} -> {dados['usuario'].email}")
+                )
 
         self.stdout.write(self.style.SUCCESS("Seed concluído com sucesso."))
