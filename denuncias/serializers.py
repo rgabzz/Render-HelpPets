@@ -8,7 +8,8 @@ class DenunciasSerializer(serializers.ModelSerializer):
             choices=[choice[0] for choice in Denuncias.CONDICAO_CHOICES]
         )
     )
-    
+
     class Meta:
         model = Denuncias
         fields = '__all__'
+        read_only_fields = ['usuario']
