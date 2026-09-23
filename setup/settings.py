@@ -14,10 +14,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 
-import pymysql
-pymysql.install_as_MySQLdb()
-pymysql.version_info = (2, 2, 4, 'final', 0)
-
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -33,16 +29,7 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-# No Render, defina a env var RENDER_EXTERNAL_HOSTNAME automaticamente,
-# e/ou ALLOWED_HOSTS manualmente (separado por vírgula) se precisar de outros domínios.
-ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', '').split(',') if h.strip()]
-
-RENDER_EXTERNAL_HOSTNAME = os.getenv('RENDER_EXTERNAL_HOSTNAME')
-if RENDER_EXTERNAL_HOSTNAME:
-    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
-
-if DEBUG:
-    ALLOWED_HOSTS += ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = []
 
 
 # Application definition
@@ -59,7 +46,6 @@ INSTALLED_APPS = [
     # Updates
     'rest_framework',
     'django_filters',
-    'corsheaders',
 
     # HelpPets
     'users',
@@ -69,8 +55,6 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -78,11 +62,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-
-# CORS: liberado para todas as origens para facilitar os testes do app mobile.
-# Quando o projeto for pra produção "de verdade", troque por CORS_ALLOWED_ORIGINS
-# com a lista de domínios específicos.
-CORS_ALLOW_ALL_ORIGINS = True
 
 ROOT_URLCONF = 'setup.urls'
 
@@ -107,57 +86,16 @@ WSGI_APPLICATION = 'setup.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-# O Railway costuma fornecer a conexão pronta como uma única URL, no formato:
-# mysql://usuario:senha@host:porta/nome_do_banco
-# Aceitamos essa URL tanto na env var DATABASE_URL/MYSQL_URL/MYSQL_PUBLIC_URL
-# quanto (por engano) colada dentro de DB_HOST, e nesse caso a decompomos
-# automaticamente em host/porta/usuário/senha/banco.
-from urllib.parse import urlparse
-
-_database_url = (
-    os.getenv('DATABASE_URL')
-    or os.getenv('MYSQL_PUBLIC_URL')
-    or os.getenv('MYSQL_URL')
-)
-
-_db_host_env = os.getenv('DB_HOST', '')
-if not _database_url and '://' in _db_host_env:
-    # Alguém colou a URL inteira no campo DB_HOST por engano.
-    _database_url = _db_host_env
-    _db_host_env = ''
-
-if _database_url:
-    _parsed = urlparse(_database_url)
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.mysql',
-            'NAME': _parsed.path.lstrip('/'),
-            'USER': _parsed.username or '',
-            'PASSWORD': _parsed.password or '',
-            'HOST': _parsed.hostname or 'localhost',
-            'PORT': str(_parsed.port or 3306),
-            'OPTIONS': {
-                'charset': 'utf8mb4',
-            },
-        }
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'help_pets',
+        'USER': f'{os.getenv('USER')}',
+        'PASSWORD': f'{os.getenv('PASSWORD')}',
+        'HOST': 'localhost',
+        'PORT': '3306',
     }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.mysql',
-            'NAME': os.getenv('DB_NAME', 'help_pets'),
-            'USER': os.getenv('DB_USER', ''),
-            'PASSWORD': os.getenv('DB_PASSWORD', ''),
-            'HOST': _db_host_env or 'localhost',
-            'PORT': os.getenv('DB_PORT', '3306'),
-            'OPTIONS': {
-                'OPTIONS': {
-                'charset': 'utf8mb4',
-                'ssl': {'ca': str(BASE_DIR / 'ca.pem')},
-            },
-            },
-        }
-    }
+}
 
 
 # Password validation
@@ -195,16 +133,11 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-STORAGES = {
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
 
 AUTH_USER_MODEL = "users.User"
 
 REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAdminUser'],
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
