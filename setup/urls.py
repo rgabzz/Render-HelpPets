@@ -18,5 +18,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('register/', RegisterView.as_view(), name='Registro'),
     path('login/',LoginView.as_view(), name='Login'),
+    path('health/', lambda request: JsonResponse({
+    'status': 'online'
+    })),
     path('', include(router.urls)),
 ]
