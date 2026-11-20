@@ -52,9 +52,11 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
+    throttle_scope = 'register'
 
 class LoginView(TokenObtainPairView):
     serializer_class = CustomTokenSerializer
+    throttle_scope = 'login' 
 
 class OngViewset(viewsets.ModelViewSet):
     serializer_class = OngSerializer
