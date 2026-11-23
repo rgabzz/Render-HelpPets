@@ -14,9 +14,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 
-import pymysql
-pymysql.install_as_MySQLdb()
-pymysql.version_info = (2, 2, 4, 'final', 0)
+import dj_database_url
 
 load_dotenv()
 
@@ -105,58 +103,23 @@ TEMPLATES = [
 WSGI_APPLICATION = 'setup.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-
-# O Railway costuma fornecer a conexão pronta como uma única URL, no formato:
-# mysql://usuario:senha@host:porta/nome_do_banco
-# Aceitamos essa URL tanto na env var DATABASE_URL/MYSQL_URL/MYSQL_PUBLIC_URL
-# quanto (por engano) colada dentro de DB_HOST, e nesse caso a decompomos
-# automaticamente em host/porta/usuário/senha/banco.
-from urllib.parse import urlparse
-
-_database_url = (
-    os.getenv('DATABASE_URL')
-    or os.getenv('MYSQL_PUBLIC_URL')
-    or os.getenv('MYSQL_URL')
-)
-
-_db_host_env = os.getenv('DB_HOST', '')
-if not _database_url and '://' in _db_host_env:
-    # Alguém colou a URL inteira no campo DB_HOST por engano.
-    _database_url = _db_host_env
-    _db_host_env = ''
+# Database (PostgreSQL - Supabase)
+_database_url = os.getenv('DATABASE_URL')
 
 if _database_url:
-    _parsed = urlparse(_database_url)
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.mysql',
-            'NAME': _parsed.path.lstrip('/'),
-            'USER': _parsed.username or '',
-            'PASSWORD': _parsed.password or '',
-            'HOST': _parsed.hostname or 'localhost',
-            'PORT': str(_parsed.port or 3306),
-            'OPTIONS': {
-                'charset': 'utf8mb4',
-            },
-        }
+        'default': dj_database_url.parse(
+            _database_url,
+            conn_max_age=60,
+            conn_health_checks=True,
+            ssl_require=True,
+        )
     }
 else:
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.mysql',
-            'NAME': os.getenv('DB_NAME', 'help_pets'),
-            'USER': os.getenv('DB_USER', ''),
-            'PASSWORD': os.getenv('DB_PASSWORD', ''),
-            'HOST': _db_host_env or 'localhost',
-            'PORT': os.getenv('DB_PORT', '3306'),
-            'OPTIONS': {
-                'OPTIONS': {
-                'charset': 'utf8mb4',
-                'ssl': {'ca': str(BASE_DIR / 'ca.pem')},
-            },
-            },
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
 
