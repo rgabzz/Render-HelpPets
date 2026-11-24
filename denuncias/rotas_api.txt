@@ -13,7 +13,15 @@ e agora também passam pela permissão customizada DenunciasPermission.
 
 Headers obrigatórios:
 - Authorization: Bearer TOKEN_DE_ACESSO
-- Content-Type: application/json
+
+Content-Type (ATENÇÃO, mudou por causa do envio de foto):
+- POST /denuncias/  -> multipart/form-data (campos de formulário + arquivo "foto")
+- PUT /denuncias/{id}/ -> multipart/form-data
+- PATCH /denuncias/{id}/ -> application/json (sem foto) OU multipart/form-data (trocando a foto)
+- Em multipart NÃO defina o Content-Type manualmente: deixe o fetch/axios/cliente HTTP
+  gerar sozinho, pois ele inclui o "boundary" que separa os campos. Se for escrito à mão,
+  o envio falha.
+- GET e DELETE não têm corpo, então não precisam de Content-Type.
 
 Regras da DenunciasPermission (checadas por objeto, não pra lista):
 - GET /denuncias/{id}/ (detalhar)  -> só ONG, o dono (usuario da denúncia) ou admin
@@ -42,7 +50,7 @@ a API vai devolver uma lista de objetos, no formato:
   {
     "id": 1,
     "titulo_caixinha": "Cachorro ferido na praça",
-    "midia_path": "midias/foto1.jpg",
+    "midia_path": "https://xxxx.supabase.co/storage/v1/object/public/pet-photos/3/a1b2c3.webp",
     "tipo_animal": "Cachorro",
     "quantidade": 1,
     "latitude": "-5.660800",
@@ -62,29 +70,74 @@ a API vai devolver uma lista de objetos, no formato:
 ------------------------------------------------
 
 ---------- Criar (POST /denuncias/) ----------
-Front end envia (campos obrigatórios do model):
-{
-  "titulo_caixinha": "Cachorro ferido na praça",
-  "midia_path": "midias/foto1.jpg",
-  "tipo_animal": "Cachorro",
-  "quantidade": 1,
-  "latitude": -5.6608,
-  "longitude": -37.7969,
-  "cidade": "Apodi",
-  "condicao": ["Machucado", "Sangrando"],
-  "descricao": "Animal encontrado ferido próximo à praça central",
-  "motivo": "Maus tratos",
-  "status": "aberto"
-}
+Formato: multipart/form-data (NÃO é mais JSON). A foto vai junto, no campo "foto".
+A API redimensiona a foto, converte pra WebP, envia pro Supabase Storage e preenche
+sozinha o "midia_path" com a URL pública da imagem.
+
+Campos do formulário (obrigatórios):
+  titulo_caixinha  = Cachorro ferido na praça
+  tipo_animal      = Cachorro
+  quantidade       = 1
+  latitude         = -5.6608
+  longitude        = -37.7969
+  cidade           = Apodi
+  condicao         = Machucado          <- repetir o campo, 1 vez por item da lista
+  condicao         = Sangrando
+  descricao        = Animal encontrado ferido próximo à praça central
+  motivo           = Maus tratos
+  status           = aberto             <- obrigatório na validação, mas a API ignora o
+                                           valor e sempre grava "aberto"
+  foto             = (arquivo de imagem)  <- OBRIGATÓRIO na criação
+
+Regras da foto:
+- Campo: "foto" (tipo arquivo). Sem ela, a API devolve 400.
+- Formatos aceitos: JPEG, PNG, WebP. Fotos HEIC/HEIF (padrão do iPhone) NÃO são aceitas:
+  converter pra JPEG no app antes de enviar (ex.: expo-image-picker/ImageManipulator).
+- Tamanho máximo: 10 MB. Dica: reduzir no app antes (ex.: lado maior ~1600px, qualidade 0.8)
+  economiza dados móveis e deixa o envio mais rápido.
+- A API reduz pra no máximo 1600px e converte pra WebP; os metadados (GPS/EXIF) são removidos.
+
+NÃO enviar "midia_path": agora é somente leitura (a API preenche). Se for enviado, é ignorado.
 
 Campos opcionais / preenchidos automaticamente pela API se não enviados:
 - data_encontro       -> default: data/hora atual
 - data_status_aceito  -> default: data/hora atual
 - criado_em           -> default: data/hora atual
 - ong_id              -> null até uma ONG assumir o chamado
-- usuario_id          -> normalmente setado a partir do usuário logado
+- usuario_id          -> setado a partir do usuário logado
 
-a API vai devolver o objeto criado, no mesmo formato do GET (com "id" novo).
+Exemplo (JavaScript / React Native):
+  const form = new FormData();
+  form.append('titulo_caixinha', 'Cachorro ferido na praça');
+  form.append('tipo_animal', 'Cachorro');
+  form.append('quantidade', '1');
+  form.append('latitude', '-5.6608');
+  form.append('longitude', '-37.7969');
+  form.append('cidade', 'Apodi');
+  form.append('condicao', 'Machucado');
+  form.append('condicao', 'Sangrando');
+  form.append('descricao', 'Animal encontrado ferido próximo à praça central');
+  form.append('motivo', 'Maus tratos');
+  form.append('status', 'aberto');
+  form.append('foto', { uri: fotoUri, name: 'foto.jpg', type: 'image/jpeg' });
+
+  fetch(`${API}/denuncias/`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },  // sem Content-Type!
+    body: form,
+  });
+
+Sucesso: 201 Created. A API devolve o objeto criado, no mesmo formato do GET, com "id" novo
+e "midia_path" já com a URL da foto (use essa URL direto num <Image>).
+
+Erros comuns (400 Bad Request, corpo em JSON):
+- {"foto": ["Envie a foto do animal."]}                      -> faltou o campo "foto"
+- {"foto": ["Faça upload de uma imagem válida. ..."]}        -> arquivo não é imagem (ou HEIC)
+- ["Imagem maior que 10 MB."]                                -> foto muito grande
+- ["Falha ao salvar a foto no storage."] / ["Não foi possível enviar a foto agora. ..."]
+                                                             -> problema no servidor de imagens;
+                                                                pode tentar de novo
+- {"condicao": [...]}                                        -> valor fora da lista permitida
 ------------------------------------------------
 
 ---------- Detalhar (GET /denuncias/{id}/) ----------
@@ -92,16 +145,23 @@ Retorna os dados de uma denúncia específica, no mesmo formato do item da lista
 --------------------------------------------------------
 
 ---------- Atualizar completo (PUT /denuncias/{id}/) ----------
-Front end precisa enviar TODOS os campos obrigatórios do model (igual ao POST).
+Formato: multipart/form-data, com os mesmos campos obrigatórios do POST.
+A "foto" é opcional aqui: se enviar, substitui a foto atual; se não enviar, a atual é mantida.
 a API vai devolver o objeto atualizado.
 ------------------------------------------------------------------
 
 ---------- Atualizar parcial (PATCH /denuncias/{id}/) ----------
-Front end envia só o que mudou, por exemplo:
+Front end envia só o que mudou.
+
+Sem trocar a foto -> application/json, por exemplo:
 {
   "status": "atendimento",
   "ong_id": 2
 }
+
+Trocando a foto -> multipart/form-data, com o campo "foto" (mesmas regras do POST) e,
+se quiser, os outros campos que mudaram. A API envia a nova imagem e atualiza o "midia_path".
+(A foto antiga continua guardada no storage, mas deixa de ser usada pela denúncia.)
 
 a API vai devolver o objeto com os dados atualizados:
 {
@@ -125,6 +185,11 @@ Remove a denúncia. Retorna 204 No Content em caso de sucesso.
   "Osso ou ferida aberta", "Inchaço ou caroços", "Parasitas", "Sarna aparente",
   "Queda de pelo", "Assustado", "Agressivo", "Muito quieto / parado", "Desorientado",
   "Perto de trânsito intenso"
+
+- foto: campo só de ENVIO (arquivo). Não aparece nas respostas; o que volta é o "midia_path".
+
+- midia_path: somente leitura. É a URL pública da foto no Supabase Storage (termina em .webp).
+  Não enviar; usar só pra exibir a imagem.
 
 - status: aceita apenas "aberto", "atendimento" ou "finalizado"
 

@@ -123,6 +123,11 @@ else:
         }
     }
 
+# Supabase Storage (fotos)
+SUPABASE_URL = os.getenv('SUPABASE_URL', '').rstrip('/')
+SUPABASE_SECRET_KEY = os.getenv('SUPABASE_SECRET_KEY', '')
+SUPABASE_BUCKET = os.getenv('SUPABASE_BUCKET', 'animal-photos')
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -184,6 +189,7 @@ REST_FRAMEWORK = {
         'user': '300/min',
         'login': '5/min',
         'register': '3/min',
+        'upload': '20/min',
     },
 }
 

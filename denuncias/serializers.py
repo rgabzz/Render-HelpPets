@@ -9,7 +9,14 @@ class DenunciasSerializer(serializers.ModelSerializer):
         )
     )
 
+    foto = serializers.ImageField(write_only=True, required=False)
+
     class Meta:
         model = Denuncias
         fields = '__all__'
         read_only_fields = ['usuario']
+
+    def validate(self, attrs):
+        if self.instance is None and 'foto' not in attrs:
+            raise serializers.ValidationError({'foto': 'Envie a foto do animal.'})
+        return attrs
