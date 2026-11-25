@@ -23,7 +23,7 @@ class DenunciasViewset(viewsets.ModelViewSet):
         # bloqueia o usuario de poder colocar a denuncia ja com uma ong pre pronta, alem de proibir alguem de colocar outro id de usuario apra aquela denuncia
         foto = serializer.validated_data.pop('foto')
         url = enviar_foto(foto, self.request.user.id)
-        serializer.save(usuario=self.request.user, ong=None, status='aberto')
+        serializer.save(usuario=self.request.user, ong=None, status='aberto', midia_path=url)
 
     def perform_update(self, serializer):
         foto = serializer.validated_data.pop('foto', None)

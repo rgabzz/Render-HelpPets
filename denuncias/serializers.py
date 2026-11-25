@@ -14,7 +14,7 @@ class DenunciasSerializer(serializers.ModelSerializer):
     class Meta:
         model = Denuncias
         fields = '__all__'
-        read_only_fields = ['usuario']
+        read_only_fields = ['usuario','midia_path']
 
     def validate(self, attrs):
         if self.instance is None and 'foto' not in attrs:
