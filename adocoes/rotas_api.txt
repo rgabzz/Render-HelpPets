@@ -24,7 +24,15 @@ e agora também passam pela permissão customizada AnimalPermissions.
 
 Headers obrigatórios:
 - Authorization: Bearer TOKEN_DE_ACESSO
-- Content-Type: application/json
+
+Content-Type (ATENÇÃO: mudou por causa do envio de fotos):
+- POST /animais/             -> multipart/form-data (campos de formulário + arquivos no campo "fotos")
+- PUT / PATCH /animais/{id}/ -> application/json quando NÃO há foto nova
+                                multipart/form-data quando for ENVIAR foto nova
+- GET e DELETE               -> sem corpo, então não precisam de Content-Type
+- Em multipart NÃO defina o Content-Type manualmente: deixe o fetch/axios/cliente HTTP
+  gerar sozinho, pois ele inclui o "boundary" que separa os campos. Se for escrito à mão,
+  o envio falha.
 
 Regras da AnimalPermissions:
 - POST /animais/ (criar)          -> só ONG (TIPO_USUARIO == 'ONG') ou admin
@@ -65,56 +73,174 @@ a API vai devolver uma lista de objetos, no formato:
     "descricao": "Animal dócil, gosta de crianças",
     "status_adocao": "disponivel",
     "ong": 1,
-    "criado_em": "2026-08-05T14:35:00Z"
+    "criado_em": "2026-08-05T14:35:00Z",
+    "fotos": [
+      {
+        "id": 4,
+        "url": "https://xxxx.supabase.co/storage/v1/object/public/pet-photos/animais/1/a1b2c3.webp",
+        "ordem": 1
+      },
+      {
+        "id": 5,
+        "url": "https://xxxx.supabase.co/storage/v1/object/public/pet-photos/animais/1/d4e5f6.webp",
+        "ordem": 2
+      }
+    ]
   }
 ]
+
+"fotos" é sempre uma LISTA já ordenada (de 0 a 4 itens; animais antigos podem não ter foto).
+A foto de ordem 1 é a capa: para o card da listagem, use fotos[0].url (se a lista estiver
+vazia, mostre uma imagem padrão). Cada "url" abre direto num <Image>.
 ------------------------------------------------
 
 ---------- Criar (POST /animais/) ----------
-Front end envia:
-{
-  "nome": "Rex",
-  "especie": "Cachorro",
-  "raca": "Vira-lata",
-  "idade": "2 anos",
-  "descricao": "Animal dócil, gosta de crianças",
-  "status_adocao": "disponivel",
-  "ong": 1
-}
+Formato: multipart/form-data (NÃO é mais JSON). As fotos vão junto, no campo "fotos".
+A API redimensiona cada foto, converte pra WebP, envia pro Supabase Storage e cria sozinha
+a lista "fotos" do animal, com as URLs públicas.
 
-Campos opcionais / preenchidos automaticamente pela API se não enviados:
-- nome, especie, raca, idade -> default: "Desconhecido"
-- criado_em                  -> default: data/hora atual
+Campos do formulário:
+  nome             = Rex                      <- opcional (default "Desconhecido")
+  especie          = Cachorro                 <- opcional (default "Desconhecido")
+  raca             = Vira-lata                <- opcional (default "Desconhecido")
+  idade            = 2 anos                   <- opcional (default "Desconhecido")
+  descricao        = Animal dócil, gosta de crianças   <- obrigatório
+  status_adocao    = disponivel               <- obrigatório (disponivel | em_processo | adotado)
+  fotos            = (arquivo de imagem)      <- OBRIGATÓRIO: de 1 a 4 arquivos
+  fotos            = (arquivo de imagem)      <- repetir o MESMO campo "fotos" 1 vez por imagem
 
-a API vai devolver o objeto criado, no mesmo formato do GET (com "id" novo).
+NÃO enviar "ong": a API preenche sozinha com a ONG do usuário logado. Se for enviado, é ignorado.
+Também não é preciso enviar "criado_em" (default: data/hora atual).
+
+COMO ENVIAR VÁRIAS FOTOS (importante):
+- Use sempre o mesmo nome de campo: "fotos". NÃO use "foto1", "foto2", "fotos[]" nem "fotos[0]".
+- Cada imagem é uma parte separada do formulário com o nome "fotos".
+- A ordem de envio vira a "ordem" na resposta: a 1ª foto enviada é a capa.
+- Mesmo com uma foto só, o campo continua se chamando "fotos".
+- Não mande as imagens em base64 nem dentro de JSON: precisam ir como ARQUIVO no multipart.
+
+Regras das fotos:
+- Mínimo de 1 e máximo de 4 fotos por animal. Sem nenhuma, a API devolve 400.
+- Formatos aceitos: JPEG, PNG e WebP. Fotos HEIC/HEIF (padrão do iPhone) NÃO são aceitas:
+  converter pra JPEG no app antes de enviar (ex.: expo-image-picker/ImageManipulator).
+- Tamanho máximo: 10 MB por foto. Dica: reduzir no app antes (ex.: lado maior ~1600px,
+  qualidade 0.8) deixa o envio mais rápido.
+- A API reduz cada foto pra no máximo 1600px e converte pra WebP; os metadados são removidos.
+- Se UMA das fotos for inválida, o animal NÃO é cadastrado (tudo ou nada).
+
+Exemplo (JavaScript / React Native):
+  const form = new FormData();
+  form.append('nome', 'Rex');
+  form.append('especie', 'Cachorro');
+  form.append('raca', 'Vira-lata');
+  form.append('idade', '2 anos');
+  form.append('descricao', 'Animal dócil, gosta de crianças');
+  form.append('status_adocao', 'disponivel');
+
+  // fotosUris = lista de URIs escolhidas pela ONG (de 1 a 4)
+  fotosUris.forEach((uri, i) => {
+    form.append('fotos', { uri, name: `foto${i + 1}.jpg`, type: 'image/jpeg' });
+  });
+
+  fetch(`${API}/animais/`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },  // sem Content-Type!
+    body: form,
+  });
+
+Exemplo (navegador / React web, com <input type="file" multiple>):
+  const form = new FormData();
+  // ... demais campos como acima ...
+  for (const arquivo of input.files) {
+    form.append('fotos', arquivo);
+  }
+  await fetch(`${API}/animais/`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },  // sem Content-Type!
+    body: form,
+  });
+
+Testando no Postman / Insomnia: Body > form-data; crie uma linha com a chave "fotos" do tipo
+File pra CADA imagem (a chave se repete). Não preencha o header Content-Type.
+
+Sucesso: 201 Created. A API devolve o objeto criado, no mesmo formato do GET, com "id" novo
+e "fotos" já com as URLs.
+
+Erros comuns (400 Bad Request, corpo em JSON). O valor de "fotos" pode vir como lista, como
+texto ou como objeto: o jeito mais simples é exibir a mensagem que vier.
+- {"fotos": ["Envie pelo menos uma foto do animal."]}
+      -> nenhuma foto enviada (ou o campo não se chama "fotos")
+- {"fotos": ["Certifique-se de que este campo não tenha mais que 4 elementos."]}
+      -> mais de 4 fotos
+- {"fotos": {"1": ["Faça upload de uma imagem válida. ..."]}}
+      -> o arquivo na posição 1 da lista (contando a partir de 0) não é imagem (ou é HEIC)
+- {"fotos": "Cada foto deve ter no máximo 10 MB."}
+      -> alguma foto passou de 10 MB
+- {"fotos": "Falha ao salvar uma das fotos no storage."} /
+  {"fotos": "Não foi possível enviar as fotos agora. Tente de novo."}
+      -> problema no servidor de imagens; pode tentar de novo
+Usuário que não é ONG nem admin recebe 403 Forbidden.
 ------------------------------------------------
 
 ---------- Detalhar (GET /animais/{id}/) ----------
 Retorna os dados de um animal específico, no mesmo formato do item da listagem.
+
+Como buscar as fotos de novo:
+- As fotos vêm sempre junto com os dados, no campo "fotos" de qualquer GET (lista ou detalhe).
+  Não existe rota separada para as imagens.
+- Cada item tem {"id", "url", "ordem"}. A "url" é pública: para exibir, basta usá-la direto
+  na imagem, SEM header Authorization.
+- A lista já vem ordenada. Capa do card: fotos[0].url. Galeria: percorrer a lista inteira.
+  Animais antigos podem não ter foto: se "fotos" vier vazia, mostre uma imagem padrão.
+
+Exemplo (React Native):
+  <Image source={{ uri: animal.fotos[0].url }} style={{ width: 200, height: 200 }} />
+
+  {animal.fotos.map((f) => (
+    <Image key={f.id} source={{ uri: f.url }} style={{ width: 200, height: 200 }} />
+  ))}
 --------------------------------------------------------
 
 ---------- Atualizar completo (PUT /animais/{id}/) ----------
-Front end precisa enviar TODOS os campos obrigatórios do model (igual ao POST).
-a API vai devolver o objeto atualizado.
+Mesmos campos obrigatórios do POST (menos as fotos, que aqui são opcionais).
+- Sem foto nova -> pode enviar application/json; as fotos atuais são mantidas.
+- Com foto nova -> multipart/form-data, campo "fotos" repetido (mesmas regras do POST).
+  As fotos enviadas são ADICIONADAS às que o animal já tem (não substituem).
+  O total por animal nunca passa de 4: se já tem 3 e você manda 2, a API devolve 400.
+a API vai devolver o objeto atualizado, com a lista "fotos" completa.
 ------------------------------------------------------------------
 
 ---------- Atualizar parcial (PATCH /animais/{id}/) ----------
-Front end envia só o que mudou, por exemplo:
+Front end envia só o que mudou.
+
+Sem foto nova -> application/json, por exemplo:
 {
   "status_adocao": "em_processo"
 }
 
-a API vai devolver o objeto com os dados atualizados.
+Adicionando fotos -> multipart/form-data, com o campo "fotos" repetido (mesmas regras do POST)
+e, se quiser, os outros campos que mudaram. As fotos novas entram DEPOIS das existentes
+(a "ordem" continua de onde parou) e a foto de capa (ordem 1) não muda.
+
+ATENÇÃO: por enquanto NÃO existe rota para remover ou trocar uma foto individual pelo app.
+Só dá pra adicionar (até completar 4). A remoção de fotos é feita pelo admin do Django.
+
+a API vai devolver o objeto com os dados atualizados, incluindo a lista "fotos".
 ------------------------------------------------------------------
 
 ---------- Remover (DELETE /animais/{id}/) ----------
-Remove o animal. Retorna 204 No Content em caso de sucesso.
+Remove o animal e as linhas de foto dele. Retorna 204 No Content em caso de sucesso.
+(Os arquivos das fotos continuam guardados no storage; só deixam de aparecer na API.)
 ----------------------------------------------------------
 
 ---------- Observações sobre os campos ----------
 - status_adocao: aceita apenas "disponivel", "em_processo" ou "adotado"
-- ong: id da ONG responsável pelo animal (obrigatório, on_delete=CASCADE — se a
-  ONG for apagada, os animais dela também são)
+- fotos: o MESMO nome é usado na entrada e na saída, mas com formatos diferentes:
+    ENTRADA (POST/PUT/PATCH): arquivos de imagem no multipart, campo "fotos" repetido (1 a 4).
+    SAÍDA (GET/POST/PUT/PATCH): lista de objetos {"id", "url", "ordem"}.
+  "ordem" 1 é a foto de capa. A "url" é pública (termina em .webp) e abre direto num <Image>.
+- ong: id da ONG responsável pelo animal. Somente leitura: a API preenche com a ONG do usuário
+  logado (on_delete=CASCADE — se a ONG for apagada, os animais dela também são)
 ----------------------------------------------------
 
 ============================================================
@@ -204,4 +330,3 @@ Remove o registro de adoção. Retorna 204 No Content em caso de sucesso.
   pois o campo usa on_delete=SET_NULL)
 - usuario: id do usuário que adotou (pode ficar null se o usuário for
   deletado, pois o campo usa on_delete=SET_NULL)
-
