@@ -51,3 +51,21 @@ class Adocao(models.Model):
         )
        
     data_adocao = models.DateTimeField(null=False, default=timezone.now)
+
+class AnimalFoto(models.Model):
+    """Uma foto de um animal para adoção. Cada animal pode ter várias."""
+
+    animal = models.ForeignKey(
+        'adocoes.Animal',
+        on_delete=models.CASCADE,
+        related_name='fotos',
+    )
+    midia_path = models.CharField(max_length=255)  # URL pública no bucket pet-photos
+    ordem = models.PositiveIntegerField(default=1)  # 1 = foto de capa
+    criado_em = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['ordem', 'id']
+
+    def __str__(self):
+        return f'Foto {self.ordem} do animal {self.animal_id}'

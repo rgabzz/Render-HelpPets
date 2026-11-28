@@ -1,5 +1,10 @@
 from django.contrib import admin
-from denuncias.models import Denuncias
+from denuncias.models import Denuncias, DenunciaFoto
+
+class DenunciaFotoInline(admin.TabularInline):
+    model = DenunciaFoto
+    extra = 0
+
 
 class VisualizarDenuncias(admin.ModelAdmin):
     
@@ -15,7 +20,9 @@ class VisualizarDenuncias(admin.ModelAdmin):
     
     '''
 
-    list_display = ('id', 'titulo_caixinha', 'midia_path', 'tipo_animal','quantidade','latitude','longitude','cidade','condicao','descricao','motivo','data_encontro','data_status_aceito','status','ong','criado_em','usuario',)
+    inlines = [DenunciaFotoInline]
+
+    list_display = ('id', 'titulo_caixinha', 'tipo_animal','quantidade','latitude','longitude','cidade','condicao','descricao','motivo','data_encontro','data_status_aceito','status','ong','criado_em','usuario',)
     list_display_links = ('titulo_caixinha',)
     list_per_page = 10
     search_fields = ('usuario','titulo_caixinha','ong','condicao','data_encontro')

@@ -3,7 +3,7 @@ from django.utils import timezone
 from datetime import date, timedelta
 
 from users.models import User, Ong
-from denuncias.models import Denuncias
+from denuncias.models import Denuncias,DenunciaFoto
 from adocoes.models import Animal, Adocao
 
 
@@ -219,7 +219,7 @@ class Command(BaseCommand):
         denuncias = [
             {
                 "titulo_caixinha": "Cachorro ferido na estrada de Caraúbas",
-                "midia_path": "seed/denuncia_1.jpg",
+                "fotos": ["seed/denuncia_1.jpg"],
                 "tipo_animal": "Cachorro",
                 "quantidade": 1,
                 "latitude": -5.742200,
@@ -235,7 +235,7 @@ class Command(BaseCommand):
             },
             {
                 "titulo_caixinha": "Ninhada de gatos abandonada",
-                "midia_path": "seed/denuncia_2.jpg",
+                "fotos": ["seed/denuncia_2.jpg"],
                 "tipo_animal": "Gato",
                 "quantidade": 4,
                 "latitude": -5.736500,
@@ -251,7 +251,7 @@ class Command(BaseCommand):
             },
             {
                 "titulo_caixinha": "Cavalo solto em área de risco",
-                "midia_path": "seed/denuncia_3.jpg",
+                "fotos": ["seed/denuncia_3.jpg"],
                 "tipo_animal": "Equino",
                 "quantidade": 1,
                 "latitude": -5.732000,
@@ -268,11 +268,15 @@ class Command(BaseCommand):
         ]
 
         for dados in denuncias:
-            _, created = Denuncias.objects.get_or_create(
+            dados = dict(dados)
+            fotos = dados.pop("fotos", [])
+            denuncia, created = Denuncias.objects.get_or_create(
                 titulo_caixinha=dados["titulo_caixinha"],
                 defaults=dados,
             )
             if created:
+                for ordem, caminho in enumerate(fotos, start=1):
+                    DenunciaFoto.objects.create(denuncia=denuncia, midia_path=caminho, ordem=ordem)
                 self.stdout.write(self.style.SUCCESS(f"  -> Denúncia criada: {dados['titulo_caixinha']}"))
 
         # ------------------------------------------------------------------

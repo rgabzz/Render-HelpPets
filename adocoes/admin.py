@@ -1,5 +1,9 @@
 from django.contrib import admin
-from adocoes.models import Adocao,Animal
+from adocoes.models import Adocao,Animal,AnimalFoto
+
+class AnimalFotoInline(admin.TabularInline):
+    model = AnimalFoto
+    extra = 0
 
 class VisualizarAnimal(admin.ModelAdmin):
     
@@ -14,6 +18,7 @@ class VisualizarAnimal(admin.ModelAdmin):
     + search_fields - Qual dos fields vc consegue pesquisar
     
     '''
+    inlines = [AnimalFotoInline]
 
     list_display = ('id', 'nome', 'especie', 'raca','idade','descricao','status_adocao','ong','criado_em',)
     list_display_links = ('nome',)

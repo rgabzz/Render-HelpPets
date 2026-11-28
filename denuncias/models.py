@@ -54,8 +54,6 @@ class Denuncias(models.Model):
     
     titulo_caixinha = models.CharField(max_length=255,null=False)
 
-    midia_path = models.CharField(max_length=255,null=False)
-
     tipo_animal = models.CharField(max_length=255,null=False)
     quantidade = models.IntegerField(null=False)
 
@@ -93,3 +91,22 @@ class Denuncias(models.Model):
     
     def __str__(self):
         return self.titulo_caixinha
+
+
+
+class DenunciaFoto(models.Model):
+
+    denuncia = models.ForeignKey(
+        'denuncias.Denuncias',
+        on_delete=models.CASCADE,
+        related_name='fotos',
+    )
+    midia_path = models.CharField(max_length=255)  # URL pública no bucket pet-photos
+    ordem = models.PositiveIntegerField(default=1)  # 1 = foto de capa
+    criado_em = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['ordem', 'id']
+
+    def __str__(self):
+        return f'Foto {self.ordem} da denúncia {self.denuncia_id}'
